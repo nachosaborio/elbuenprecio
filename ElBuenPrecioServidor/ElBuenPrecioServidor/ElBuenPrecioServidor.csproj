@@ -1,0 +1,224 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ElBuenPrecioServidor</RootNamespace>
+    <AssemblyName>ElBuenPrecioServidor</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ElBuenPrecio.Entidades">
+      <HintPath>..\..\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\bin\Debug\ElBuenPrecio.Entidades.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ActualizarCajeros.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ActualizarCajeros.Designer.cs">
+      <DependentUpon>ActualizarCajeros.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ActualizarInventario.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ActualizarInventario.Designer.cs">
+      <DependentUpon>ActualizarInventario.cs</DependentUpon>
+    </Compile>
+    <Compile Include="DevuelveUnaVenta.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="DevuelveUnaVenta.Designer.cs">
+      <DependentUpon>DevuelveUnaVenta.cs</DependentUpon>
+    </Compile>
+    <Compile Include="DevuelveUnCajero.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="DevuelveUnCajero.Designer.cs">
+      <DependentUpon>DevuelveUnCajero.cs</DependentUpon>
+    </Compile>
+    <Compile Include="DevuelveUnProducto.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="DevuelveUnProducto.Designer.cs">
+      <DependentUpon>DevuelveUnProducto.cs</DependentUpon>
+    </Compile>
+    <Compile Include="FormularioPadreBasico.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FormularioPadreBasico.Designer.cs">
+      <DependentUpon>FormularioPadreBasico.cs</DependentUpon>
+    </Compile>
+    <Compile Include="FormularioPadreConDataGridView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FormularioPadreConDataGridView.Designer.cs">
+      <DependentUpon>FormularioPadreConDataGridView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MasCategorias.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MasCategorias.Designer.cs">
+      <DependentUpon>MasCategorias.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MasProductos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MasProductos.Designer.cs">
+      <DependentUpon>MasProductos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MostrarCajeros.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MostrarCajeros.Designer.cs">
+      <DependentUpon>MostrarCajeros.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MostrarCategorias.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MostrarCategorias.Designer.cs">
+      <DependentUpon>MostrarCategorias.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MostrarDetalleDeUnaVenta.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MostrarDetalleDeUnaVenta.Designer.cs">
+      <DependentUpon>MostrarDetalleDeUnaVenta.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MostrarProductosPorCategoria.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MostrarProductosPorCategoria.Designer.cs">
+      <DependentUpon>MostrarProductosPorCategoria.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MostrarTodosLosProductos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MostrarTodosLosProductos.Designer.cs">
+      <DependentUpon>MostrarTodosLosProductos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="VentanaServidor.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="VentanaServidor.Designer.cs">
+      <DependentUpon>VentanaServidor.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="ActualizarCajeros.resx">
+      <DependentUpon>ActualizarCajeros.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ActualizarInventario.resx">
+      <DependentUpon>ActualizarInventario.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="DevuelveUnaVenta.resx">
+      <DependentUpon>DevuelveUnaVenta.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="DevuelveUnCajero.resx">
+      <DependentUpon>DevuelveUnCajero.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="DevuelveUnProducto.resx">
+      <DependentUpon>DevuelveUnProducto.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormularioPadreBasico.resx">
+      <DependentUpon>FormularioPadreBasico.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormularioPadreConDataGridView.resx">
+      <DependentUpon>FormularioPadreConDataGridView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MasCategorias.resx">
+      <DependentUpon>MasCategorias.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MasProductos.resx">
+      <DependentUpon>MasProductos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MostrarCajeros.resx">
+      <DependentUpon>MostrarCajeros.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MostrarCategorias.resx">
+      <DependentUpon>MostrarCategorias.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MostrarDetalleDeUnaVenta.resx">
+      <DependentUpon>MostrarDetalleDeUnaVenta.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MostrarProductosPorCategoria.resx">
+      <DependentUpon>MostrarProductosPorCategoria.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MostrarTodosLosProductos.resx">
+      <DependentUpon>MostrarTodosLosProductos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="VentanaServidor.resx">
+      <DependentUpon>VentanaServidor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ElBuenPrecio.ADO\ElBuenPrecio.ADO.csproj">
+      <Project>{c6e9cfd5-27ab-4baa-9d22-68611f3d164c}</Project>
+      <Name>ElBuenPrecio.ADO</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

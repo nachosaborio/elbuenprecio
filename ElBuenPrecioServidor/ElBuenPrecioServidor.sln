@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30223.230
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ElBuenPrecioServidor", "ElBuenPrecioServidor\ElBuenPrecioServidor.csproj", "{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ElBuenPrecio.ADO", "ElBuenPrecio.ADO\ElBuenPrecio.ADO.csproj", "{C6E9CFD5-27AB-4BAA-9D22-68611F3D164C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46A3A73A-EE9F-49BC-8C9C-327FB04408E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6E9CFD5-27AB-4BAA-9D22-68611F3D164C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6E9CFD5-27AB-4BAA-9D22-68611F3D164C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6E9CFD5-27AB-4BAA-9D22-68611F3D164C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6E9CFD5-27AB-4BAA-9D22-68611F3D164C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B4AABF59-BCC9-46BF-B9E1-98C6374FC063}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,9 @@
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\bin\Debug\ElBuenPrecio.ADO.dll
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\bin\Debug\ElBuenPrecio.ADO.pdb
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\obj\Debug\ElBuenPrecio.ADO.csprojAssemblyReference.cache
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\obj\Debug\ElBuenPrecio.ADO.csproj.CoreCompileInputs.cache
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\obj\Debug\ElBuenPrecio.ADO.dll
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\obj\Debug\ElBuenPrecio.ADO.pdb
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\bin\Debug\ElBuenPrecio.Entidades.dll
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\bin\Debug\ElBuenPrecio.Entidades.pdb
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecioServidor\ElBuenPrecio.ADO\obj\Debug\ElBuenPrecio.ADO.csproj.CopyComplete

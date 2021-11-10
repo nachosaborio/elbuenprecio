@@ -1,0 +1,6 @@
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\obj\Debug\ElBuenPrecio.Entidades.csprojAssemblyReference.cache
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\obj\Debug\ElBuenPrecio.Entidades.csproj.CoreCompileInputs.cache
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\bin\Debug\ElBuenPrecio.Entidades.dll
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\bin\Debug\ElBuenPrecio.Entidades.pdb
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\obj\Debug\ElBuenPrecio.Entidades.dll
+C:\Users\EQUIPO\Desktop\C#\ElBuenPrecioFinal\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\obj\Debug\ElBuenPrecio.Entidades.pdb

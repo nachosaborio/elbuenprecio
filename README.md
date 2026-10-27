@@ -1,5 +1,11 @@
 # El Buen Precio
 
+![C#](https://img.shields.io/badge/C%23-239120?logo=csharp&logoColor=white)
+![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4?logo=dotnet&logoColor=white)
+![SQL Server](https://img.shields.io/badge/SQL%20Server-CC2927?logo=microsoftsqlserver&logoColor=white)
+![WinForms](https://img.shields.io/badge/UI-Windows%20Forms-0078D6?logo=windows&logoColor=white)
+![Architecture](https://img.shields.io/badge/architecture-Client%E2%80%93Server%20%2B%20Multithreading-2b6cb0)
+
 A multi-cashier **client–server point-of-sale (POS) system** for a supermarket, built in **C#** with a custom **TCP + JSON messaging protocol**, **multithreading** (one thread per connected client), and a **SQL Server** backend.
 
 This was my final project for the Advanced Programming course of the Informatics Engineering degree at **Universidad Estatal a Distancia de Costa Rica (UNED)** — the project where I learned C#, multithreading, and SQL from the ground up.

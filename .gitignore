@@ -1,0 +1,35 @@
+# Visual Studio / .NET Framework
+.vs/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# NuGet (packages.config)
+packages/
+*.nupkg
+!**/packages/build/
+
+# Artefactos compilados
+*.exe
+*.exe.config
+*.dll
+*.pdb
+*.cache
+*.log
+
+# SQLite local
+*.db
+*.db-shm
+*.db-wal
+
+# Varios
+Thumbs.db
+Desktop.ini

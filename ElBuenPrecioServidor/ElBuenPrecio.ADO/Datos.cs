@@ -1,715 +1,635 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Data.SqlClient;
 using System.Configuration;
-using System.Data;
+using System.IO;
+using Microsoft.Data.Sqlite;
 using ElBuenPrecio.Entidades;
 
 namespace ElBuenPrecio.ADO
 {
     public class Datos
     {
+        private const string NombreCadena = "cadenaDeConexion";
+
+        // Tablas que se pueden contar con Contar(). El nombre de tabla nunca viene de entrada externa.
+        private static readonly string[] TablasPermitidas = { "Cajero", "Categoria", "Producto", "Venta", "DetalleDeLaVenta" };
+
+        // Esquema SQLite traducido de ElBuenPrecio.sql: mismo orden de columnas, mismas PK y FK.
+        private const string Esquema = @"
+CREATE TABLE IF NOT EXISTS Cajero (
+    Identificacion  INTEGER NOT NULL,
+    Nombre          TEXT    NOT NULL,
+    PrimerApellido  TEXT    NOT NULL,
+    SegundoApellido TEXT    NOT NULL,
+    CajaAsignada    INTEGER NOT NULL,
+    Activo          INTEGER NOT NULL CHECK (Activo BETWEEN 0 AND 255),
+    CONSTRAINT PK_Cajero PRIMARY KEY (Identificacion)
+);
+CREATE TABLE IF NOT EXISTS Categoria (
+    Codigo      INTEGER NOT NULL,
+    Descripcion TEXT    NOT NULL,
+    CONSTRAINT PK_Categoria PRIMARY KEY (Codigo)
+);
+CREATE TABLE IF NOT EXISTS Producto (
+    Codigo          INTEGER NOT NULL,
+    Descripcion     TEXT    NOT NULL,
+    Precio          NUMERIC NOT NULL,
+    Cantidad        INTEGER NOT NULL,
+    CodigoCategoria INTEGER NOT NULL,
+    CONSTRAINT PK_Producto PRIMARY KEY (Codigo),
+    CONSTRAINT FK_Producto_Categoria FOREIGN KEY (CodigoCategoria) REFERENCES Categoria (Codigo)
+);
+CREATE TABLE IF NOT EXISTS Venta (
+    Codigo       INTEGER NOT NULL,
+    CodigoCajero INTEGER NOT NULL,
+    Fecha        TEXT    NOT NULL,
+    Importe      NUMERIC NOT NULL,
+    CONSTRAINT PK_Venta PRIMARY KEY (Codigo),
+    CONSTRAINT FK_Venta_Cajero FOREIGN KEY (CodigoCajero) REFERENCES Cajero (Identificacion)
+);
+CREATE TABLE IF NOT EXISTS DetalleDeLaVenta (
+    CodigoVenta    INTEGER NOT NULL,
+    CodigoProducto INTEGER NOT NULL,
+    PrecioUnitario NUMERIC NOT NULL,
+    Cantidad       INTEGER NOT NULL,
+    CONSTRAINT FK_Detalle_Producto FOREIGN KEY (CodigoProducto) REFERENCES Producto (Codigo),
+    CONSTRAINT FK_Detalle_Venta    FOREIGN KEY (CodigoVenta)    REFERENCES Venta (Codigo)
+);";
+
+        // Resuelve un Data Source relativo contra el directorio indicado. Las rutas absolutas,
+        // ":memory:" y las URI "file:" se dejan igual. Se conservan las demás claves.
+        public static string ResolverCadenaDeConexion(string cadena, string directorioBase)
+        {
+            var builder = new SqliteConnectionStringBuilder(cadena);
+            string origen = builder.DataSource;
+            if (!string.IsNullOrWhiteSpace(origen)
+                && origen != ":memory:"
+                && !origen.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+                && !Path.IsPathRooted(origen))
+            {
+                builder.DataSource = Path.Combine(directorioBase, origen);
+            }
+            return builder.ToString();
+        }
+
+        // Abre una conexión con la cadena resuelta contra AppDomain.CurrentDomain.BaseDirectory
+        // y activa la integridad referencial (PRAGMA por conexión, Requisito 8.10).
+        private static SqliteConnection AbrirConexion()
+        {
+            string cadena = ConfigurationManager.ConnectionStrings[NombreCadena].ConnectionString;
+            var conexion = new SqliteConnection(
+                ResolverCadenaDeConexion(cadena, AppDomain.CurrentDomain.BaseDirectory));
+            conexion.Open();
+            using (var pragma = conexion.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA foreign_keys = ON;";
+                pragma.ExecuteNonQuery();
+            }
+            return conexion;
+        }
+
+        // Ejecuta una sentencia sin resultados, opcionalmente dentro de una transacción.
+        private static void Ejecutar(SqliteConnection conexion, SqliteTransaction transaccion, string sql)
+        {
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.Transaction = transaccion;
+                comando.CommandText = sql;
+                comando.ExecuteNonQuery();
+            }
+        }
+
+        // Cuenta los registros de una tabla. Solo admite nombres de la lista fija TablasPermitidas.
+        private static long Contar(SqliteConnection conexion, SqliteTransaction transaccion, string tabla)
+        {
+            if (Array.IndexOf(TablasPermitidas, tabla) < 0)
+                throw new ArgumentException("Tabla no permitida: " + tabla, nameof(tabla));
+
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.Transaction = transaccion;
+                comando.CommandText = string.Concat("SELECT COUNT(*) FROM ", tabla, ";");
+                return Convert.ToInt64(comando.ExecuteScalar());
+            }
+        }
+
+        // Crea el archivo de base de datos si no existe, el esquema si falta y los datos semilla
+        // en las tablas que estén vacías. Las tablas con registros no se modifican.
+        public void InicializarBaseDeDatos()
+        {
+            SQLitePCL.Batteries_V2.Init();
+            using (var conexion = AbrirConexion())
+            {
+                Ejecutar(conexion, null, "PRAGMA journal_mode = WAL;");
+                Ejecutar(conexion, null, Esquema);
+                using (var tx = conexion.BeginTransaction())
+                {
+                    if (Contar(conexion, tx, "Cajero") == 0) InsertarCajerosSemilla(conexion, tx);
+                    if (Contar(conexion, tx, "Categoria") == 0) InsertarCategoriasSemilla(conexion, tx);
+                    if (Contar(conexion, tx, "Producto") == 0) InsertarProductosSemilla(conexion, tx);
+                    tx.Commit();
+                }
+            }
+        }
+
+        // Cajero.Estado: 1 = activo, 0 = pendiente de activación.
+        private static void InsertarCajerosSemilla(SqliteConnection conexion, SqliteTransaction tx)
+        {
+            InsertarCajero(conexion, tx, 1, "Ana", "Mora", "Solís", 1, 1);
+            InsertarCajero(conexion, tx, 2, "Luis", "Vargas", "Rojas", 2, 0);
+        }
+
+        private static void InsertarCajero(SqliteConnection conexion, SqliteTransaction tx,
+            int id, string nombre, string apellido1, string apellido2, int caja, byte activo)
+        {
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.Transaction = tx;
+                comando.CommandText = "INSERT INTO Cajero (Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo) " +
+                    "VALUES (@id, @nombre, @apellido1, @apellido2, @caja, @activo);";
+                comando.Parameters.AddWithValue("@id", id);
+                comando.Parameters.AddWithValue("@nombre", nombre);
+                comando.Parameters.AddWithValue("@apellido1", apellido1);
+                comando.Parameters.AddWithValue("@apellido2", apellido2);
+                comando.Parameters.AddWithValue("@caja", caja);
+                comando.Parameters.AddWithValue("@activo", activo);
+                comando.ExecuteNonQuery();
+            }
+        }
+
+        private static void InsertarCategoriasSemilla(SqliteConnection conexion, SqliteTransaction tx)
+        {
+            InsertarCategoria(conexion, tx, 1, "Abarrotes");
+            InsertarCategoria(conexion, tx, 2, "Lácteos");
+            InsertarCategoria(conexion, tx, 3, "Limpieza");
+        }
+
+        private static void InsertarCategoria(SqliteConnection conexion, SqliteTransaction tx, int codigo, string descripcion)
+        {
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.Transaction = tx;
+                comando.CommandText = "INSERT INTO Categoria (Codigo, Descripcion) VALUES (@codigo, @descripcion);";
+                comando.Parameters.AddWithValue("@codigo", codigo);
+                comando.Parameters.AddWithValue("@descripcion", descripcion);
+                comando.ExecuteNonQuery();
+            }
+        }
+
+        private static void InsertarProductosSemilla(SqliteConnection conexion, SqliteTransaction tx)
+        {
+            InsertarProducto(conexion, tx, 1, "Arroz 1 kg", 1250.00m, 50, 1);
+            InsertarProducto(conexion, tx, 2, "Frijoles 900 g", 1475.50m, 40, 1);
+            InsertarProducto(conexion, tx, 3, "Leche 1 L", 890.00m, 60, 2);
+            InsertarProducto(conexion, tx, 4, "Detergente 1 kg", 2350.00m, 25, 3);
+        }
+
+        // Si la categoría indicada no existe (Categoria ya tenía otros datos), se usa la de menor código.
+        // Si Categoria está vacía no se inserta nada, así nunca se viola FK_Producto_Categoria.
+        private static void InsertarProducto(SqliteConnection conexion, SqliteTransaction tx,
+            int codigo, string descripcion, decimal precio, int cantidad, int categoria)
+        {
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.Transaction = tx;
+                comando.CommandText = "INSERT INTO Producto (Codigo, Descripcion, Precio, Cantidad, CodigoCategoria) " +
+                    "SELECT @c, @d, @p, @s, COALESCE((SELECT Codigo FROM Categoria WHERE Codigo = @cat), (SELECT MIN(Codigo) FROM Categoria)) " +
+                    "WHERE EXISTS (SELECT 1 FROM Categoria);";
+                comando.Parameters.AddWithValue("@c", codigo);
+                comando.Parameters.AddWithValue("@d", descripcion);
+                comando.Parameters.AddWithValue("@p", precio);
+                comando.Parameters.AddWithValue("@s", cantidad);
+                comando.Parameters.AddWithValue("@cat", categoria);
+                comando.ExecuteNonQuery();
+            }
+        }
+
         //Esta función se usa para probar si la base de datos existe y si el App.Config está bien configurado
         public void Conectar()
         {
-
-            string cadena;
-            SqlConnection conexion;
-
-            cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            conexion = new SqlConnection(cadena);
-            conexion.Open();
-            conexion.Close();
+            using (AbrirConexion())
+            {
+            }
         }
 
         public List<Cajero> ObtenerCajeros()
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Cajero> listaCajeros = new List<Cajero>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo From Cajero";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo FROM Cajero";
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaCajeros.Add(new Cajero
-                        (reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                        reader.GetInt32(4), reader.GetByte(5)));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaCajeros.Add(new Cajero
+                            (reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                            reader.GetInt32(4), Convert.ToByte(reader.GetValue(5))));
+                    }
+                }
+            }
             return listaCajeros;
         }//Fin obtener cajeros
 
         public Cajero ObtenerUnCajero(int ID)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
             Cajero cajero = null;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo from Cajero where Identificacion = @user";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@user", ID);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo FROM Cajero WHERE Identificacion = @user";
+                comando.Parameters.AddWithValue("@user", ID);
+                using (var reader = comando.ExecuteReader())
                 {
-                    cajero = new Cajero(reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                        reader.GetInt32(4), reader.GetByte(5));
-                }//Fin while
-            }//fin if
-            else
-            {
-                cajero = new Cajero(-1, "", "", "", 0, 0);
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
+                        {
+                            cajero = new Cajero(reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                                reader.GetInt32(4), Convert.ToByte(reader.GetValue(5)));
+                        }
+                    }
+                    else
+                    {
+                        // Centinela: iD == -1 significa que el cajero no existe.
+                        cajero = new Cajero(-1, "", "", "", 0, 0);
+                    }
+                }
             }
-            conexion.Close();
-
             return cajero;
         }
 
         public List<Categoria> ObtenerCategorias()
         {
-
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Categoria> listaCategorias = new List<Categoria>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Codigo, Descripcion From Categoria";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, Descripcion FROM Categoria";
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaCategorias.Add(new Categoria(reader.GetInt32(0), reader.GetString(1)));
-                }//Fin while
-            }//fin if
-            conexion.Close();
-
+                    while (reader.Read())
+                    {
+                        listaCategorias.Add(new Categoria(reader.GetInt32(0), reader.GetString(1)));
+                    }
+                }
+            }
             return listaCategorias;
         }//Fin obtener categorias
 
         public Categoria ObtenerUnaCategoria(int ID)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
             Categoria categoria = null;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Codigo, Descripcion From Categoria where Codigo = @id";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@id", ID);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, Descripcion FROM Categoria WHERE Codigo = @id";
+                comando.Parameters.AddWithValue("@id", ID);
+                using (var reader = comando.ExecuteReader())
                 {
-                    categoria = new Categoria(reader.GetInt32(0), reader.GetString(1));
-                }//Fin while
-            }//fin if
-            else
-            {
-                return null;
+                    if (!reader.HasRows)
+                    {
+                        return null;
+                    }
+                    while (reader.Read())
+                    {
+                        categoria = new Categoria(reader.GetInt32(0), reader.GetString(1));
+                    }
+                }
             }
-            conexion.Close();
-
             return categoria;
         }
 
         public List<Producto> ObtenerTodosLosProductos()
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Producto> listaProductos = new List<Producto>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Codigo, Descripcion, Precio, Cantidad, CodigoCategoria  From Producto";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, Descripcion, Precio, Cantidad, CodigoCategoria FROM Producto";
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaProductos.Add(new Producto
-                        (reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetInt32(3), ObtenerUnaCategoria(reader.GetInt32(4))));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaProductos.Add(new Producto
+                            (reader.GetInt32(0), reader.GetString(1), Convert.ToDecimal(reader.GetValue(2)), reader.GetInt32(3),
+                            ObtenerUnaCategoria(reader.GetInt32(4))));
+                    }
+                }
+            }
             return listaProductos;
         }//Fin obtener productos
 
         public List<Producto> ObtenerProductosPorNombre(string nombre)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Producto> listaProductos = new List<Producto>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select * From Producto Where Descripcion like ('%" + nombre + "%')";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                // El texto del usuario va como parámetro, nunca concatenado en el SQL.
+                comando.CommandText = "SELECT Codigo, Descripcion, Precio, Cantidad, CodigoCategoria FROM Producto WHERE Descripcion LIKE @patron";
+                comando.Parameters.AddWithValue("@patron", string.Concat("%", nombre, "%"));
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaProductos.Add(new Producto
-                        ((Int32)reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetInt32(3),
-                        ObtenerUnaCategoria(reader.GetInt32(4))));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaProductos.Add(new Producto
+                            (reader.GetInt32(0), reader.GetString(1), Convert.ToDecimal(reader.GetValue(2)), reader.GetInt32(3),
+                            ObtenerUnaCategoria(reader.GetInt32(4))));
+                    }
+                }
+            }
             return listaProductos;
         }//Fin obtener productos
 
         public int ObtenerStockDeUnProducto(int codigo)
         {
             int stock = 0;
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            List<Producto> listaProductos = new List<Producto>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Cantidad From Producto Where Codigo = @codigo";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@codigo", codigo);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Cantidad FROM Producto WHERE Codigo = @codigo";
+                comando.Parameters.AddWithValue("@codigo", codigo);
+                using (var reader = comando.ExecuteReader())
                 {
-                    stock = (Int32)reader.GetInt32(0);
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        stock = reader.GetInt32(0);
+                    }
+                }
+            }
             return stock;
-        }//Fin obtener productos
+        }//Fin obtener stock
 
         public List<Producto> ObtenerProductosPorCategoria(int codigoCategoria)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Producto> listaProductos = new List<Producto>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select Codigo, Descripcion, Precio, Cantidad, CodigoCategoria From Producto Where CodigoCategoria = @codigo";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@codigo", codigoCategoria);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, Descripcion, Precio, Cantidad, CodigoCategoria FROM Producto WHERE CodigoCategoria = @codigo";
+                comando.Parameters.AddWithValue("@codigo", codigoCategoria);
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaProductos.Add(new Producto
-                        ((Int32)reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetInt32(3),
-                        ObtenerUnaCategoria(reader.GetInt32(4))));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaProductos.Add(new Producto
+                            (reader.GetInt32(0), reader.GetString(1), Convert.ToDecimal(reader.GetValue(2)), reader.GetInt32(3),
+                            ObtenerUnaCategoria(reader.GetInt32(4))));
+                    }
+                }
+            }
             return listaProductos;
         }//Fin obtener productos
 
         public void IngresarCajero(Cajero cajero)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-
-            conexion = new SqlConnection(cadena);
-            query = "Insert into Cajero values (@ID, @Nombre, @Apellido1, @Apellido2, @Caja, @activo)";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@ID", cajero.iD);
-            comando.Parameters.AddWithValue("@Nombre", cajero.Nombre);
-            comando.Parameters.AddWithValue("@Apellido1", cajero.Apellido1);
-            comando.Parameters.AddWithValue("@Apellido2", cajero.Apellido2);
-            comando.Parameters.AddWithValue("@Caja", cajero.Caja);
-            comando.Parameters.AddWithValue("@activo", cajero.Estado);
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.CommandText = "INSERT INTO Cajero (Identificacion, Nombre, PrimerApellido, SegundoApellido, CajaAsignada, Activo) " +
+                    "VALUES (@ID, @Nombre, @Apellido1, @Apellido2, @Caja, @activo)";
+                comando.Parameters.AddWithValue("@ID", cajero.iD);
+                comando.Parameters.AddWithValue("@Nombre", cajero.Nombre);
+                comando.Parameters.AddWithValue("@Apellido1", cajero.Apellido1);
+                comando.Parameters.AddWithValue("@Apellido2", cajero.Apellido2);
+                comando.Parameters.AddWithValue("@Caja", cajero.Caja);
+                comando.Parameters.AddWithValue("@activo", cajero.Estado);
+                comando.ExecuteNonQuery();
+            }
         }//Fin ingresar cajero
 
         public void ActualizarCajero(Cajero cajero)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-
-            conexion = new SqlConnection(cadena);
-            query = "Update Cajero set Identificacion=@ID, Nombre=@Nombre, PrimerApellido=@Apellido1, SegundoApellido=@Apellido2," +
-                " CajaAsignada=@Caja, Activo=@activo where Identificacion = @ID";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@ID", cajero.iD);
-            comando.Parameters.AddWithValue("@Nombre", cajero.Nombre);
-            comando.Parameters.AddWithValue("@Apellido1", cajero.Apellido1);
-            comando.Parameters.AddWithValue("@Apellido2", cajero.Apellido2);
-            comando.Parameters.AddWithValue("@Caja", cajero.Caja);
-            comando.Parameters.AddWithValue("@activo", cajero.Estado);
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.CommandText = "UPDATE Cajero SET Identificacion = @ID, Nombre = @Nombre, PrimerApellido = @Apellido1, SegundoApellido = @Apellido2, " +
+                    "CajaAsignada = @Caja, Activo = @activo WHERE Identificacion = @ID";
+                comando.Parameters.AddWithValue("@ID", cajero.iD);
+                comando.Parameters.AddWithValue("@Nombre", cajero.Nombre);
+                comando.Parameters.AddWithValue("@Apellido1", cajero.Apellido1);
+                comando.Parameters.AddWithValue("@Apellido2", cajero.Apellido2);
+                comando.Parameters.AddWithValue("@Caja", cajero.Caja);
+                comando.Parameters.AddWithValue("@activo", cajero.Estado);
+                comando.ExecuteNonQuery();
+            }
         }
 
         public void IngresarCategoria(Categoria categoria)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-
-            conexion = new SqlConnection(cadena);
-            query = "Insert into Categoria values (@ID, @Descripcion)";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@ID", categoria.IdCategoria);
-            comando.Parameters.AddWithValue("@Descripcion", categoria.DescripcionCategoria);
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.CommandText = "INSERT INTO Categoria (Codigo, Descripcion) VALUES (@ID, @Descripcion)";
+                comando.Parameters.AddWithValue("@ID", categoria.IdCategoria);
+                comando.Parameters.AddWithValue("@Descripcion", categoria.DescripcionCategoria);
+                comando.ExecuteNonQuery();
+            }
         }//Fin ingresar categoría
 
         public void IngresarProducto(Producto producto)
         {
-
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-
-            conexion = new SqlConnection(cadena);
-            query = "Insert into Producto values (@ID, @Descripcion, @Precio, @Stock, @Categoria)";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@ID", producto.IdProducto);
-            comando.Parameters.AddWithValue("@Descripcion", producto.DescripcionProducto);
-            comando.Parameters.AddWithValue("@Precio", producto.Precio);
-            comando.Parameters.AddWithValue("@Stock", producto.Stock);
-            comando.Parameters.AddWithValue("@Categoria", producto.Categoria.IdCategoria);
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.CommandText = "INSERT INTO Producto (Codigo, Descripcion, Precio, Cantidad, CodigoCategoria) " +
+                    "VALUES (@ID, @Descripcion, @Precio, @Stock, @Categoria)";
+                comando.Parameters.AddWithValue("@ID", producto.IdProducto);
+                comando.Parameters.AddWithValue("@Descripcion", producto.DescripcionProducto);
+                comando.Parameters.AddWithValue("@Precio", producto.Precio);
+                comando.Parameters.AddWithValue("@Stock", producto.Stock);
+                comando.Parameters.AddWithValue("@Categoria", producto.Categoria.IdCategoria);
+                comando.ExecuteNonQuery();
+            }
         }//Fin ingresar producto
 
         public void ActualizarProductos(Producto producto)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-
-            conexion = new SqlConnection(cadena);
-            query = "Update Producto set Codigo=@ID, Descripcion=@descripcion, Precio=@precio, Cantidad=@stock," +
-                " CodigoCategoria=@categoria where Codigo = @ID";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@ID", producto.IdProducto);
-            comando.Parameters.AddWithValue("@descripcion", producto.DescripcionProducto);
-            comando.Parameters.AddWithValue("@precio", producto.Precio);
-            comando.Parameters.AddWithValue("@stock", producto.Stock);
-            comando.Parameters.AddWithValue("@categoria", producto.Categoria.IdCategoria);
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
+            {
+                comando.CommandText = "UPDATE Producto SET Codigo = @ID, Descripcion = @descripcion, Precio = @precio, Cantidad = @stock, " +
+                    "CodigoCategoria = @categoria WHERE Codigo = @ID";
+                comando.Parameters.AddWithValue("@ID", producto.IdProducto);
+                comando.Parameters.AddWithValue("@descripcion", producto.DescripcionProducto);
+                comando.Parameters.AddWithValue("@precio", producto.Precio);
+                comando.Parameters.AddWithValue("@stock", producto.Stock);
+                comando.Parameters.AddWithValue("@categoria", producto.Categoria.IdCategoria);
+                comando.ExecuteNonQuery();
+            }
         }
 
+        // Una sola conexión y una transacción (BEGIN IMMEDIATE): los escritores se serializan,
+        // así que dos ventas simultáneas no obtienen el mismo MAX(Codigo) + 1.
+        // Orden igual al original: cabecera de la venta, todos los detalles y luego el stock.
         public void RegistrarUnaVenta(TodaLaVenta venta)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
-            SqlConnection conexion;
-            SqlDataReader reader;
-            SqlCommand comando = new SqlCommand();
-            int codigo = 0;
-
-            conexion = new SqlConnection(cadena);
-            query = "Select MAX(Codigo) as ultimo from Venta ";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var tx = conexion.BeginTransaction())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                int codigo;
+                using (var comando = conexion.CreateCommand())
                 {
-                    if (reader.IsDBNull(0))
+                    comando.Transaction = tx;
+                    comando.CommandText = "SELECT MAX(Codigo) FROM Venta";
+                    object ultimo = comando.ExecuteScalar();
+                    if (ultimo == null || ultimo == DBNull.Value)
                         codigo = 0;
                     else
-                        codigo = reader.GetInt32(0) + 1;
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                        codigo = Convert.ToInt32(ultimo) + 1;
+                }
 
-            conexion = new SqlConnection(cadena);
-            query = "Insert into Venta values (@numfac, @cajero, GetDate(), @importe)";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@numfac", codigo);
-            comando.Parameters.AddWithValue("@cajero", venta.Venta.CodigoCajero);
-            comando.Parameters.AddWithValue("@importe", venta.Venta.Importe);
-
-
-            conexion.Open(); //Abre la conexion
-
-            comando.ExecuteNonQuery(); //Ejecuta la sentencia
-
-            conexion.Close();
-
-            int a = 0, b = 0, c = 0, d = 0;
-            foreach (DetalleDeVenta detalle in venta.Detalle)
-            {
-                conexion = new SqlConnection(cadena);
-                query = "Insert into DetalleDeLaVenta (CodigoVenta,CodigoProducto,PrecioUnitario,Cantidad) values (@factura"+a+", " +
-                    "@codigoProducto"+b+", @precioUnitario"+c+", @cantidad"+d+")";
-
-                comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-                comando.CommandText = query; //Asigna el query al comando
-                comando.Connection = conexion; //Le dice con cuál conexion trabajar
-                comando.Parameters.AddWithValue("@factura"+a+"", codigo);
-                comando.Parameters.AddWithValue("@codigoProducto"+b+"", detalle.CodigoProducto);
-                comando.Parameters.AddWithValue("@precioUnitario"+c+"", detalle.PrecioUnitario);
-                comando.Parameters.AddWithValue("@cantidad"+d+"", detalle.Cantidad);
-                ++a; ++b; ++c; ++d;
-
-                conexion.Open(); //Abre la conexion
-
-                comando.ExecuteNonQuery(); //Ejecuta la sentencia
-                
-
-                conexion.Close();
-                
-            }
-
-            int x = 0, y =0, z=0;
-            foreach (DetalleDeVenta detalle in venta.Detalle)
-            {
-                conexion = new SqlConnection(cadena);
-                int cantidad = 0;
-
-                conexion = new SqlConnection(cadena);
-                query = "Select * from  Producto where Codigo = @codigo"+x+"";
-
-                comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-                comando.CommandText = query; //Asigna el query al comando
-                comando.Connection = conexion; //Le dice con cuál conexion trabajar
-                comando.Parameters.AddWithValue("@codigo"+x+"", detalle.CodigoProducto);
-                conexion.Open(); //Abre la conexion
-
-                reader = comando.ExecuteReader(); //Ejecuta la sentencia
-                                                  //Si la consulta devuelve algo
-                if (reader.HasRows)
+                using (var comando = conexion.CreateCommand())
                 {
-                    //Mientras haya algo que leer...
-                    while (reader.Read())
+                    comando.Transaction = tx;
+                    comando.CommandText = "INSERT INTO Venta (Codigo, CodigoCajero, Fecha, Importe) " +
+                        "VALUES (@numfac, @cajero, date('now', 'localtime'), @importe)";
+                    comando.Parameters.AddWithValue("@numfac", codigo);
+                    comando.Parameters.AddWithValue("@cajero", venta.Venta.CodigoCajero);
+                    comando.Parameters.AddWithValue("@importe", venta.Venta.Importe);
+                    comando.ExecuteNonQuery();
+                }
+
+                foreach (DetalleDeVenta detalle in venta.Detalle)
+                {
+                    using (var comando = conexion.CreateCommand())
                     {
-                       Producto producto = new Producto(reader.GetInt32(0), reader.GetString(1), reader.GetDecimal(2), reader.GetInt32(3),
-                        ObtenerUnaCategoria(reader.GetInt32(4)));
-                        cantidad = producto.Stock;
-                    }//Fin while
-                }//fin if
-                ++x;
-                conexion.Close();
+                        comando.Transaction = tx;
+                        comando.CommandText = "INSERT INTO DetalleDeLaVenta (CodigoVenta, CodigoProducto, PrecioUnitario, Cantidad) " +
+                            "VALUES (@factura, @codigoProducto, @precioUnitario, @cantidad)";
+                        comando.Parameters.AddWithValue("@factura", codigo);
+                        comando.Parameters.AddWithValue("@codigoProducto", detalle.CodigoProducto);
+                        comando.Parameters.AddWithValue("@precioUnitario", detalle.PrecioUnitario);
+                        comando.Parameters.AddWithValue("@cantidad", detalle.Cantidad);
+                        comando.ExecuteNonQuery();
+                    }
+                }
 
-                int nuevo = cantidad - detalle.Cantidad;
+                foreach (DetalleDeVenta detalle in venta.Detalle)
+                {
+                    // Stock actual del producto (0 si no existe, igual que antes).
+                    int cantidad = 0;
+                    using (var comando = conexion.CreateCommand())
+                    {
+                        comando.Transaction = tx;
+                        comando.CommandText = "SELECT Cantidad FROM Producto WHERE Codigo = @codigo";
+                        comando.Parameters.AddWithValue("@codigo", detalle.CodigoProducto);
+                        using (var reader = comando.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                cantidad = reader.GetInt32(0);
+                            }
+                        }
+                    }
 
-                query = "Update Producto set Cantidad =  @stock"+y+" Where Codigo = @codex"+z+"";
+                    int nuevo = cantidad - detalle.Cantidad;
 
-                comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-                comando.CommandText = query; //Asigna el query al comando
-                comando.Connection = conexion; //Le dice con cuál conexion trabajar
-                comando.Parameters.AddWithValue("@stock" + y + "", nuevo);
-                comando.Parameters.AddWithValue("@codex" + z + "", detalle.CodigoProducto);
+                    using (var comando = conexion.CreateCommand())
+                    {
+                        comando.Transaction = tx;
+                        comando.CommandText = "UPDATE Producto SET Cantidad = @stock WHERE Codigo = @codex";
+                        comando.Parameters.AddWithValue("@stock", nuevo);
+                        comando.Parameters.AddWithValue("@codex", detalle.CodigoProducto);
+                        comando.ExecuteNonQuery();
+                    }
+                }
 
-                conexion.Open(); //Abre la conexion
-
-                comando.ExecuteNonQuery(); //Ejecuta la sentencia
-                ++y; ++z;
-                conexion.Close();
+                tx.Commit();
             }
         }
 
+        // TODO: NRE preexistente, sin uso — no arreglado en esta migración
         public TodaLaVenta ObtenerTodaUnaFactura(int numFactura)
         {
             TodaLaVenta venta = null;
             Venta laVenta = null;
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<DetalleDeVenta> listaDetalles = new List<DetalleDeVenta>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select *  From Venta where Codigo = @codigo";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@codigo", numFactura);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, CodigoCajero, Fecha, Importe FROM Venta WHERE Codigo = @codigo";
+                comando.Parameters.AddWithValue("@codigo", numFactura);
+                using (var reader = comando.ExecuteReader())
                 {
-                    laVenta = new Venta
-                        (reader.GetInt32(0), reader.GetInt32(1), reader.GetDateTime(2),
-                        reader.GetDecimal(3));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        laVenta = new Venta
+                            (reader.GetInt32(0), reader.GetInt32(1), reader.GetDateTime(2),
+                            Convert.ToDecimal(reader.GetValue(3)));
+                    }
+                }
+            }
             venta.Venta = laVenta;
-            conexion = new SqlConnection(cadena);
-            query = "Select * From DetalleDeLaVenta where CodigoVenta = @codigo";
 
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@codigo", venta.Venta.Codigo);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT CodigoVenta, CodigoProducto, PrecioUnitario, Cantidad FROM DetalleDeLaVenta WHERE CodigoVenta = @codigo";
+                comando.Parameters.AddWithValue("@codigo", venta.Venta.Codigo);
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaDetalles.Add(new DetalleDeVenta
-                        (reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2), reader.GetInt32(3)));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaDetalles.Add(new DetalleDeVenta
+                            (reader.GetInt32(0), reader.GetInt32(1), Convert.ToDecimal(reader.GetValue(2)), reader.GetInt32(3)));
+                    }
+                }
+            }
             venta.Detalle = listaDetalles;
             return venta;
-        }//Fin obtener productos
+        }//Fin obtener toda una factura
 
         public List<Venta> ObtenerTodasLasVentas()
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<Venta> listaVentas = new List<Venta>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select * From Venta";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT Codigo, CodigoCajero, Fecha, Importe FROM Venta";
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaVentas.Add(new Venta(reader.GetInt32(0), reader.GetInt32(1), reader.GetDateTime(2),
-                        reader.GetDecimal(3)));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaVentas.Add(new Venta(reader.GetInt32(0), reader.GetInt32(1), reader.GetDateTime(2),
+                            Convert.ToDecimal(reader.GetValue(3))));
+                    }
+                }
+            }
             return listaVentas;
-        }//Fin obtener productos
+        }//Fin obtener ventas
 
         public List<DetalleDeVenta> ObtenerDetalleDeUnaVenta(Venta venta)
         {
-            string query;
-            string cadena = ConfigurationManager.ConnectionStrings["cadenaDeConexion"].ConnectionString; //Lee el nombre de la cadena de conexion del appconfig
             List<DetalleDeVenta> listaDetalles = new List<DetalleDeVenta>();
-            SqlConnection conexion;
-            SqlCommand comando = new SqlCommand();
-            SqlDataReader reader;
 
-            conexion = new SqlConnection(cadena);
-            query = "Select * From DetalleDeLaVenta where CodigoVenta = @codigo";
-
-            comando.CommandType = CommandType.Text;//Indica qué tipo de conexion es, si texto o un procedimiento almacenado
-            comando.CommandText = query; //Asigna el query al comando
-            comando.Connection = conexion; //Le dice con cuál conexion trabajar
-            comando.Parameters.AddWithValue("@codigo", venta.Codigo);
-
-            conexion.Open(); //Abre la conexion
-
-            reader = comando.ExecuteReader(); //Ejecuta la sentencia
-
-            //Si la consulta devuelve algo
-            if (reader.HasRows)
+            using (var conexion = AbrirConexion())
+            using (var comando = conexion.CreateCommand())
             {
-                //Mientras haya algo que leer...
-                while (reader.Read())
+                comando.CommandText = "SELECT CodigoVenta, CodigoProducto, PrecioUnitario, Cantidad FROM DetalleDeLaVenta WHERE CodigoVenta = @codigo";
+                comando.Parameters.AddWithValue("@codigo", venta.Codigo);
+                using (var reader = comando.ExecuteReader())
                 {
-                    listaDetalles.Add(new DetalleDeVenta
-                        (reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2), reader.GetInt32(3)));
-                }//Fin while
-            }//fin if
-            conexion.Close();
+                    while (reader.Read())
+                    {
+                        listaDetalles.Add(new DetalleDeVenta
+                            (reader.GetInt32(0), reader.GetInt32(1), Convert.ToDecimal(reader.GetValue(2)), reader.GetInt32(3)));
+                    }
+                }
+            }
             return listaDetalles;
-        }//Fin obtener productos
+        }//Fin obtener detalle de una venta
     }
 }

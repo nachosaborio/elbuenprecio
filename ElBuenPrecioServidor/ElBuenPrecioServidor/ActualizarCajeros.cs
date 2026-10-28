@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using ElBuenPrecio.Entidades;
 using ElBuenPrecio.ADO;
-using System.Data.SqlClient;
 
 namespace ElBuenPrecioServidor
 {

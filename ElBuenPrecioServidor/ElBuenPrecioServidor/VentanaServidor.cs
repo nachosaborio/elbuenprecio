@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 using ElBuenPrecio.Entidades;
 using System.IO;
 using ElBuenPrecio.ADO;
-using System.Data.SqlClient;
+using System.Data.Common;
 using System.Runtime.Remoting.Messaging;
 
 namespace ElBuenPrecioServidor
@@ -42,9 +42,10 @@ namespace ElBuenPrecioServidor
             si no funciona, lanza una ventana de advertencia.*/
             try
             {
+                datos.InicializarBaseDeDatos();
                 datos.Conectar();
             }
-            catch (SqlException)
+            catch (Exception ex) when (ex is DbException || ex is DllNotFoundException || ex is TypeInitializationException)
             {
                 MessageBox.Show("Al parecer hay un error con la conexión con la base de datos.\nVerifique que ésta existe" +
                     " y que la cadena de conexión en App.Config esté correctamente configurada.", "Error",
@@ -155,7 +156,7 @@ namespace ElBuenPrecioServidor
                         datos.IngresarCajero(mensajeCrearCajero.Objeto);
                         resp = true;
                     }
-                    catch (SqlException)
+                    catch (DbException)
                     {
                         resp = false;
                     }

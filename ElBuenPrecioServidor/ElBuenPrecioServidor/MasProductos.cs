@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ElBuenPrecio.Entidades;
-using System.Data.SqlClient;
+using System.Data.Common;
 using ElBuenPrecio.ADO;
 
 namespace ElBuenPrecioServidor
@@ -59,7 +59,7 @@ namespace ElBuenPrecioServidor
                 tbID.Text = ""; tbDescripcion.Text = ""; tbPrecio.Text = ""; tbStock.Text = "";
             }
             //Evita que se registren dos productos con el mismo ID
-            catch (SqlException)
+            catch (DbException)
             {
                 MessageBox.Show("Ya existe un producto con este código.", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);

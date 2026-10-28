@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ElBuenPrecio.Entidades;
-using System.Data.SqlClient;
+using System.Data.Common;
 using ElBuenPrecio.ADO;
 
 namespace ElBuenPrecioServidor
@@ -52,7 +52,7 @@ namespace ElBuenPrecioServidor
                 tbID.Text = ""; tbDescripcion.Text = "";
             }
             //Evita que se registren dos categorías con la misma identificación
-            catch (SqlException)
+            catch (DbException)
             {
                 MessageBox.Show("Ya existe una categoria con este código.", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);

@@ -1,4 +1,5 @@
 # El Buen Precio
+[![CI](https://github.com/nachosaborio/elbuenprecio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nachosaborio/elbuenprecio/actions/workflows/ci.yml)
 
 ![C#](https://img.shields.io/badge/C%23-239120?logo=csharp&logoColor=white)
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4?logo=dotnet&logoColor=white)

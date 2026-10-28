@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore ElBuenPrecio.sln
+
+      - name: Build (Release)
+        run: msbuild ElBuenPrecio.sln /p:Configuration=Release /m
+
+      - name: Verify SQLite binaries in server output
+        shell: pwsh
+        run: |
+          $salida = 'ElBuenPrecioServidor/ElBuenPrecioServidor/bin/Release'
+          $esperados = @(
+            'runtimes/win-x64/native/e_sqlite3.dll',
+            'Microsoft.Data.Sqlite.dll',
+            'SQLitePCLRaw.core.dll',
+            'SQLitePCLRaw.batteries_v2.dll',
+            'SQLitePCLRaw.provider.dynamic_cdecl.dll',
+            'System.Memory.dll',
+            'System.Buffers.dll',
+            'System.Numerics.Vectors.dll',
+            'System.Runtime.CompilerServices.Unsafe.dll'
+          )
+          $faltan = $esperados | Where-Object { -not (Test-Path (Join-Path $salida $_)) }
+          if ($faltan) { $faltan | ForEach-Object { Write-Error "Falta $salida/$_" }; exit 1 }

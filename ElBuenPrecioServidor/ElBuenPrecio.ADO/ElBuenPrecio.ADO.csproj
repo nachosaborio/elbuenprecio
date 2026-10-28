@@ -33,9 +33,6 @@
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="ElBuenPrecio.Entidades">
-      <HintPath>..\..\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\bin\Debug\ElBuenPrecio.Entidades.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
@@ -49,6 +46,12 @@
   <ItemGroup>
     <Compile Include="Datos.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades.csproj">
+      <Project>{9cec4945-4856-49d7-a811-1483482f4c75}</Project>
+      <Name>ElBuenPrecio.Entidades</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

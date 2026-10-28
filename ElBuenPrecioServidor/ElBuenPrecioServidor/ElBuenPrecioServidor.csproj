@@ -35,11 +35,8 @@
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="ElBuenPrecio.Entidades">
-      <HintPath>..\..\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\bin\Debug\ElBuenPrecio.Entidades.dll</HintPath>
-    </Reference>
     <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -218,6 +215,10 @@
     <ProjectReference Include="..\ElBuenPrecio.ADO\ElBuenPrecio.ADO.csproj">
       <Project>{c6e9cfd5-27ab-4baa-9d22-68611f3d164c}</Project>
       <Name>ElBuenPrecio.ADO</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades\ElBuenPrecio.Entidades.csproj">
+      <Project>{9cec4945-4856-49d7-a811-1483482f4c75}</Project>
+      <Name>ElBuenPrecio.Entidades</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

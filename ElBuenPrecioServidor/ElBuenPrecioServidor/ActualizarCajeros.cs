@@ -49,7 +49,7 @@ namespace ElBuenPrecioServidor
                 if (Convert.ToInt32(tbCaja.Text) > 0)
                 {
                     cajero = new Cajero(Convert.ToInt32(tbID.Text), tbNombre.Text, tbApellido1.Text, tbApellido2.Text, Convert.ToInt32(tbCaja.Text),
-                        (String)cbStatus.SelectedItem == "Desactivado" ? 0 : 1);
+                        (byte)((String)cbStatus.SelectedItem == "Desactivado" ? 0 : 1));
                     if (datos.ObtenerUnCajero(cajero.iD).iD == -1)
                     {
                         datos.IngresarCajero(cajero);
